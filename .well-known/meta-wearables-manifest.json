@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "Golden Hour",
+  "description": "Sunrise, sunset and golden-hour countdown for Cairo.",
+  "appearance": {
+    "theme_color": "#FB923C",
+    "icon": {
+      "src": "../icon-mono.png",
+      "type": "monochrome"
+    },
+    "icon_background": {
+      "colors": [
+        "#FB923C",
+        "#B85A14",
+        "#7A3A0A",
+        "#241203"
+      ],
+      "stops": [
+        0.0,
+        0.33,
+        0.66,
+        1.0
+      ],
+      "inner_glow_color": "#FED7AA"
+    }
+  }
+}
