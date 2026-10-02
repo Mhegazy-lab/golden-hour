@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="application-name" content="Golden Hour">
+<meta name="description" content="Sunrise, sunset and golden-hour countdown for Cairo.">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Golden Hour</title>
+<style>
+:root{--accent:#FB923C;--bg:#160D04;--card:#241503;--text:#FFF4E8;--dim:#C9A882;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{-webkit-user-select:none;user-select:none;background:var(--bg);color:var(--text);
+  font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  display:flex;align-items:center;justify-content:center;min-height:100dvh}
+.app{width:min(480px,100vw - 24px);height:100dvh;max-height:780px;display:flex;flex-direction:column;padding:16px 14px 12px}
+header{text-align:center;margin-bottom:8px}
+header h1{font-size:22px;letter-spacing:.06em;color:var(--accent)}
+header .sub{font-size:12px;color:var(--dim);margin-top:2px}
+.card{background:var(--card);border:1px solid #4A2C0E;border-radius:16px;padding:14px;
+  display:flex;flex-direction:column;gap:12px;flex:1;justify-content:center;min-height:0;outline:none}
+.card[data-focusable]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.state{font-size:26px;font-weight:700;text-align:center}
+.window{text-align:center}
+.window .label{font-size:12px;color:var(--dim);letter-spacing:.08em}
+.window .times{font-size:30px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;margin-top:2px}
+.count{text-align:center}
+.count .label{font-size:12px;color:var(--dim);letter-spacing:.08em}
+.count .big{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
+.suntimes{display:flex;justify-content:space-around;text-align:center}
+.suntimes .s .l{font-size:12px;color:var(--dim)}
+.suntimes .s .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+footer{text-align:center;font-size:11px;color:var(--dim);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>GOLDEN HOUR</h1>
+    <div class="sub">Cairo &middot; <span id="datestr"></span></div>
+  </header>
+  <div class="card" id="card" tabindex="0" data-focusable>
+    <div class="state" id="state">--</div>
+    <div class="window">
+      <div class="label">GOLDEN HOUR WINDOW</div>
+      <div class="times" id="window">--</div>
+    </div>
+    <div class="count">
+      <div class="label" id="countlabel">COUNTDOWN</div>
+      <div class="big" id="count">--:--:--</div>
+    </div>
+    <div class="suntimes">
+      <div class="s"><div class="l">SUNRISE</div><div class="v" id="sunrise">--</div></div>
+      <div class="s"><div class="l">SUNSET</div><div class="v" id="sunset">--</div></div>
+    </div>
+  </div>
+  <footer>solar calc on-device &middot; no network needed</footer>
+</div>
+<script>
+(function(){
+"use strict";
+var LAT=30.0444,LON=31.2357;
+function fixAngle(a){a%=360;return a<0?a+360:a;}
+function fixHour(h){h%=24;return h<0?h+24:h;}
+function julianDay(y,m,d){
+  if(m<=2){y--;m+=12;}
+  var A=Math.floor(y/100);
+  var B=2-A+Math.floor(A/4);
+  return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524.5;
+}
+function solar(date,lat,lon){
+  var tz=-date.getTimezoneOffset()/60;
+  var y=date.getFullYear(),m=date.getMonth()+1,d=date.getDate();
+  var JD=julianDay(y,m,d)-tz/24;
+  var D=JD-2451545.0;
+  var rad=Math.PI/180;
+  var g=fixAngle(357.529+0.98560028*D);
+  var q=fixAngle(280.459+0.98564736*D);
+  var L=fixAngle(q+1.915*Math.sin(g*rad)+0.020*Math.sin(2*g*rad));
+  var e=23.439-0.00000036*D;
+  var RA=fixHour(Math.atan2(Math.cos(e*rad)*Math.sin(L*rad),Math.cos(L*rad))*180/Math.PI/15);
+  var decl=Math.asin(Math.sin(e*rad)*Math.sin(L*rad))*180/Math.PI;
+  var eqt=q/15-RA;
+  var dhuhr=fixHour(12+tz-lon/15-eqt);
+  function sunTime(angleDeg,after){
+    var cosH=(Math.sin(-angleDeg*rad)-Math.sin(decl*rad)*Math.sin(lat*rad))/(Math.cos(decl*rad)*Math.cos(lat*rad));
+    cosH=Math.max(-1,Math.min(1,cosH));
+    var H=Math.acos(cosH)*180/Math.PI/15;
+    return fixHour(after?dhuhr+H:dhuhr-H);
+  }
+  return {sunrise:sunTime(0.833,false),sunset:sunTime(0.833,true)};
+}
+function hToMs(h){return h*3600000;}
+function fmtTime(h){
+  var hh=Math.floor(h),mm=Math.floor((h-hh)*60);
+  var ap=hh>=12?"PM":"AM";var h12=hh%12;if(h12===0)h12=12;
+  return h12+":"+String(mm).padStart(2,"0")+" "+ap;
+}
+function fmtDur(ms){
+  ms=Math.max(0,ms);
+  var s=Math.floor(ms/1000);
+  var hh=Math.floor(s/3600),mm=Math.floor((s%3600)/60),ss=s%60;
+  return hh+":"+String(mm).padStart(2,"0")+":"+String(ss).padStart(2,"0");
+}
+var stateEl=document.getElementById("state"),windowEl=document.getElementById("window"),
+    countEl=document.getElementById("count"),countLabel=document.getElementById("countlabel");
+function refresh(){
+  var now=new Date();
+  document.getElementById("datestr").textContent=now.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  var s=solar(now,LAT,LON);
+  var ghStart=fixHour(s.sunset-1); // 60 min before sunset
+  document.getElementById("sunrise").textContent=fmtTime(s.sunrise);
+  document.getElementById("sunset").textContent=fmtTime(s.sunset);
+  windowEl.textContent=fmtTime(ghStart)+" \u2013 "+fmtTime(s.sunset);
+  var dayStart=new Date(now);dayStart.setHours(0,0,0,0);
+  var tRise=new Date(dayStart.getTime()+hToMs(s.sunrise));
+  var tGH=new Date(dayStart.getTime()+hToMs(ghStart));
+  var tSet=new Date(dayStart.getTime()+hToMs(s.sunset));
+  var tNextRise=new Date(tRise.getTime()+86400000);
+  if(now<tRise){
+    stateEl.textContent="\uD83C\uDF19 Night";
+    countLabel.textContent="SUNRISE IN";
+    countEl.textContent=fmtDur(tRise-now);
+  }else if(now<tGH){
+    stateEl.textContent="\u2600\uFE0F Day";
+    countLabel.textContent="GOLDEN HOUR IN";
+    countEl.textContent=fmtDur(tGH-now);
+  }else if(now<tSet){
+    stateEl.textContent="\uD83C\uDF05 Golden hour now";
+    countLabel.textContent="SUNSET IN";
+    countEl.textContent=fmtDur(tSet-now);
+  }else{
+    stateEl.textContent="\uD83C\uDF19 Night";
+    countLabel.textContent="SUNRISE IN";
+    countEl.textContent=fmtDur(tNextRise-now);
+  }
+}
+refresh();
+setInterval(refresh,1000);
+var card=document.getElementById("card");
+card.focus();
+document.addEventListener("keydown",function(e){
+  if(e.key==="Enter"){e.preventDefault();refresh();}
+});
+})();
+</script>
+</body>
+</html>
